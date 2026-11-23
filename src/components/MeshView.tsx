@@ -16,6 +16,15 @@ export function MeshView({ agents, selectedId, onSelect }: MeshViewProps) {
           ? `Selected: ${selected.name} · ${selected.maker} · ${selected.role}`
           : "Select an agent"}
       </p>
+      {selected?.capabilities?.length ? (
+        <div className="cap-chips" style={{ marginTop: 6 }}>
+          {selected.capabilities.map((c) => (
+            <span key={c} className="cap-chip static">
+              {c}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="mesh" role="group" aria-label="Agent mesh">
         <svg
           viewBox="0 0 100 100"
@@ -24,6 +33,7 @@ export function MeshView({ agents, selectedId, onSelect }: MeshViewProps) {
         >
           {agents.map((a, i) => {
             const b = agents[(i + 2) % agents.length];
+            if (!b) return null;
             return (
               <line
                 key={`${a.id}-${b.id}`}
@@ -50,6 +60,9 @@ export function MeshView({ agents, selectedId, onSelect }: MeshViewProps) {
           </button>
         ))}
       </div>
+      <p className="mono" style={{ marginTop: 8 }}>
+        {agents.length} agents on mesh
+      </p>
     </div>
   );
 }

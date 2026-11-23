@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { MeshView } from "@/components/MeshView";
+import { AgentRegistry } from "@/components/AgentRegistry";
 import { TaskForm } from "@/components/TaskForm";
 import { TaskList } from "@/components/TaskList";
 import { Ledger } from "@/components/Ledger";
@@ -11,13 +12,27 @@ function uid(prefix: string) {
   return prefix + Math.random().toString(36).slice(2, 8);
 }
 
+function randomMeshPoint(): { x: number; y: number } {
+  return {
+    x: 12 + Math.random() * 76,
+    y: 14 + Math.random() * 72,
+  };
+}
+
 export default function App() {
   const [agents, setAgents] = useState<Agent[]>(() => seedAgents.map((a) => ({ ...a })));
   const [tasks, setTasks] = useState<Task[]>(() => seedTasks.map((t) => ({ ...t, bids: [...t.bids] })));
   const [ledger, setLedger] = useState<LedgerEntry[]>(() => [...seedLedger]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("atlas");
+  const [capabilityFilter, setCapabilityFilter] = useState("");
   const [operator, setOperator] = useState<Operator | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+
+  const visibleAgents = useMemo(() => {
+    if (!capabilityFilter.trim()) return agents;
+    const q = capabilityFilter.trim().toLowerCase();
+    return agents.filter((a) => a.capabilities.some((c) => c.toLowerCase().includes(q)));
+  }, [agents, capabilityFilter]);
 
   const selected = useMemo(
     () => agents.find((a) => a.id === selectedAgentId) ?? agents[0],
@@ -41,21 +56,48 @@ export default function App() {
     }
   }, []);
 
+  const registerAgent = useCallback(
+    (input: Omit<Agent, "id" | "x" | "y" | "status" | "reputation">) => {
+      const point = randomMeshPoint();
+      const agent: Agent = {
+        ...input,
+        id: uid("a"),
+        status: "idle",
+        reputation: 4.0,
+        x: point.x,
+        y: point.y,
+      };
+      setAgents((prev) => [...prev, agent]);
+      setSelectedAgentId(agent.id);
+      setCapabilityFilter("");
+    },
+    []
+  );
+
   const broadcastTask = useCallback(
     (title: string, amount: number) => {
       if (!selected) return;
-      const others = agents.filter((a) => a.id !== selected.id).slice(0, 2);
+      // Prefer agents matching current capability filter, else any other idle-ish agents
+      const pool = agents.filter((a) => a.id !== selected.id);
+      const preferred = capabilityFilter.trim()
+        ? pool.filter((a) =>
+            a.capabilities.some((c) =>
+              c.toLowerCase().includes(capabilityFilter.trim().toLowerCase())
+            )
+          )
+        : pool;
+      const candidates = (preferred.length ? preferred : pool).slice(0, 3);
 
       setAgents((prev) =>
         prev.map((a) =>
-          others.some((o) => o.id === a.id) ? { ...a, status: "negotiating" as const } : a
+          candidates.some((o) => o.id === a.id) ? { ...a, status: "negotiating" as const } : a
         )
       );
 
-      const bids = others.map((a, i) => ({
+      const bids = candidates.map((a, i) => ({
         agentId: a.id,
-        amount: Math.max(0.05, +(amount * (0.75 + i * 0.12)).toFixed(2)),
-        eta: `${4 + i * 3} min`,
+        amount: Math.max(0.05, +(amount * (0.72 + i * 0.1)).toFixed(2)),
+        eta: `${3 + i * 3} min`,
       }));
 
       const task: Task = {
@@ -71,7 +113,7 @@ export default function App() {
 
       setTasks((prev) => [task, ...prev]);
     },
-    [agents, selected]
+    [agents, selected, capabilityFilter]
   );
 
   const award = useCallback((taskId: string, agentId: string) => {
@@ -125,6 +167,7 @@ export default function App() {
     setTasks(seedTasks.map((t) => ({ ...t, bids: [...t.bids] })));
     setLedger([...seedLedger]);
     setSelectedAgentId("atlas");
+    setCapabilityFilter("");
   }, []);
 
   return (
@@ -155,23 +198,41 @@ export default function App() {
 
       <p className="banner">
         {operator
-          ? `Signed in as @${operator.username}. Broadcast tasks, award bids, settle in π.`
-          : "Sign in with Pi to operate the mesh. Agents discover, negotiate, and settle value."}
+          ? `Signed in as @${operator.username}. Register agents, discover by capability, settle in π.`
+          : "Agent registry is live. Register units, filter by capability, broadcast work to the mesh."}
       </p>
 
       <main className="main">
-        <section className="panel">
-          <h2>Live mesh</h2>
-          <MeshView
-            agents={agents}
-            selectedId={selectedAgentId}
-            onSelect={setSelectedAgentId}
-          />
-        </section>
+        <div className="stack">
+          <section className="panel">
+            <h2>Live mesh</h2>
+            <MeshView
+              agents={visibleAgents.length ? visibleAgents : agents}
+              selectedId={selectedAgentId}
+              onSelect={setSelectedAgentId}
+            />
+          </section>
+
+          <section className="panel">
+            <h2>Agent registry</h2>
+            <AgentRegistry
+              agents={agents}
+              selectedId={selectedAgentId}
+              capabilityFilter={capabilityFilter}
+              onFilterChange={setCapabilityFilter}
+              onSelect={setSelectedAgentId}
+              onRegister={registerAgent}
+            />
+          </section>
+        </div>
 
         <div className="stack">
           <section className="panel">
             <h2>Post a task</h2>
+            <p className="mono" style={{ margin: "0 0 8px" }}>
+              Bidding from: {selected?.name ?? "—"}
+              {capabilityFilter ? ` · prefer “${capabilityFilter}”` : ""}
+            </p>
             <TaskForm onSubmit={broadcastTask} />
           </section>
 
