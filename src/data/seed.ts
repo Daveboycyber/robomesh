@@ -58,6 +58,8 @@ export const seedAgents: Agent[] = [
   },
 ];
 
+const now = Date.now();
+
 export const seedTasks: Task[] = [
   {
     id: "t1",
@@ -66,11 +68,35 @@ export const seedTasks: Task[] = [
     requester: "Atlas-7",
     amount: 1.2,
     status: "open",
+    round: 1,
     bids: [
-      { agentId: "forge", amount: 0.9, eta: "6 min" },
-      { agentId: "harbor", amount: 1.1, eta: "4 min" },
+      { agentId: "forge", amount: 0.9, eta: "6 min", round: 1, active: true },
+      { agentId: "harbor", amount: 1.1, eta: "4 min", round: 1, active: true },
     ],
-    createdAt: Date.now() - 1000 * 60 * 12,
+    history: [
+      {
+        id: "h1",
+        at: now - 1000 * 60 * 12,
+        type: "opened",
+        message: "Task opened at 1.20 π",
+        round: 1,
+      },
+      {
+        id: "h2",
+        at: now - 1000 * 60 * 11,
+        type: "bid",
+        message: "Forge bid 0.90 π · 6 min",
+        round: 1,
+      },
+      {
+        id: "h3",
+        at: now - 1000 * 60 * 10,
+        type: "bid",
+        message: "Harbor bid 1.10 π · 4 min",
+        round: 1,
+      },
+    ],
+    createdAt: now - 1000 * 60 * 12,
   },
   {
     id: "t2",
@@ -80,8 +106,27 @@ export const seedTasks: Task[] = [
     amount: 0.45,
     status: "working",
     awardedTo: "nimbus",
-    bids: [],
-    createdAt: Date.now() - 1000 * 60 * 40,
+    round: 1,
+    bids: [
+      { agentId: "nimbus", amount: 0.45, eta: "12 min", round: 1, active: false },
+    ],
+    history: [
+      {
+        id: "h4",
+        at: now - 1000 * 60 * 40,
+        type: "opened",
+        message: "Task opened at 0.45 π",
+        round: 1,
+      },
+      {
+        id: "h5",
+        at: now - 1000 * 60 * 38,
+        type: "award",
+        message: "Awarded to Nimbus",
+        round: 1,
+      },
+    ],
+    createdAt: now - 1000 * 60 * 40,
   },
 ];
 
@@ -90,6 +135,6 @@ export const seedLedger: LedgerEntry[] = [
     id: "l1",
     text: "Kite-3 settled last-mile drop for Harbor",
     pi: 0.32,
-    at: Date.now() - 1000 * 60 * 90,
+    at: now - 1000 * 60 * 90,
   },
 ];

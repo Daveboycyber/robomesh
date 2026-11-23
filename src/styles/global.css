@@ -346,7 +346,8 @@ label.field textarea:focus {
   color: var(--ok);
 }
 
-.status-pill.settled {
+.status-pill.settled,
+.status-pill.cancelled {
   opacity: 0.7;
 }
 
@@ -412,4 +413,28 @@ label.field textarea:focus {
 .registry-item.on {
   border-color: var(--primary);
   box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+/* Negotiation log */
+.nego-log {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.nego-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.nego-log li:last-child {
+  border-bottom: 0;
 }
