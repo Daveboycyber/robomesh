@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RoboMesh</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0c0e12;--surface:#15181e;--s2:#1c2028;--fg:#e8e6df;--muted:#8b908a;--primary:#e8a54b;--ink:#1a1206;--border:#2a2e36;--ok:#7d9a78}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:"IBM Plex Sans",system-ui,sans-serif}button,input{font:inherit}button{cursor:pointer;min-height:44px}header,.banner,main{padding:12px 16px}header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap}.mark{width:36px;height:36px;border-radius:8px;background:var(--primary);color:var(--ink);display:grid;place-items:center;font-weight:600}.sub{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}.banner{background:var(--surface);border-bottom:1px solid var(--border);color:var(--muted);font-size:14px;margin:0}main{display:grid;gap:16px}@media(min-width:960px){main{grid-template-columns:1.1fr .9fr;padding:24px}}section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}h2{margin:0;font-size:14px;font-weight:500}.mesh{position:relative;height:320px;margin-top:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden}.node{position:absolute;transform:translate(-50%,-50%);border:1px solid var(--border);background:var(--s2);color:var(--fg);border-radius:999px;padding:8px 12px;text-align:left}.node.on{background:var(--primary);color:var(--ink);border-color:var(--primary)}.node small{display:block;font-family:"IBM Plex Mono",monospace}label{display:block;margin-top:12px;font-size:12px;color:var(--muted)}input{width:100%;margin-top:4px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:8px 12px}.primary{width:100%;margin-top:12px;background:var(--primary);color:var(--ink);border:0;border-radius:8px;font-weight:500}.ghost{background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:0 12px}li{list-style:none}.card{border:1px solid var(--border);background:var(--bg);border-radius:10px;padding:12px;margin-top:12px}.row{display:flex;justify-content:space-between;gap:8px;align-items:center}.mono{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}.ok{color:var(--ok);font-family:"IBM Plex Mono",monospace}
+ul{padding:0;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;gap:12px;align-items:center">
+    <div class="mark">R</div>
+    <div><div style="font-weight:600">RoboMesh</div><div class="sub">coordination · settlement · Pi</div></div>
+  </div>
+  <button class="ghost" id="reset" type="button">Reset</button>
+</header>
+<p class="banner">Public prototype for Pi Production registration. Agents discover tasks, bid, and settle in Pi.</p>
+<main>
+  <section>
+    <h2>Live mesh</h2>
+    <p class="sub" id="sel"></p>
+    <div class="mesh" id="mesh"></div>
+  </section>
+  <div>
+    <section>
+      <h2>Post a task</h2>
+      <form id="form">
+        <label>What needs doing<input id="title" value="Relay crate to dock 2"/></label>
+        <label>Offer (Pi)<input id="amount" inputmode="decimal" value="0.8"/></label>
+        <button class="primary" type="submit">Broadcast to mesh</button>
+      </form>
+    </section>
+    <section style="margin-top:16px"><h2>Tasks</h2><div id="tasks"></div></section>
+    <section style="margin-top:16px"><h2>Settlement ledger</h2><ul id="ledger"></ul></section>
+  </div>
+</main>
+<script>
+const seed=()=>({
+ selected:"atlas",
+ agents:[
+  {id:"atlas",name:"Atlas-7",maker:"Northline",role:"Warehouse mover",status:"idle",x:22,y:28},
+  {id:"nimbus",name:"Nimbus",maker:"Fieldline",role:"Ag survey drone",status:"negotiating",x:68,y:22},
+  {id:"kite",name:"Kite-3",maker:"Harborworks",role:"Last-mile courier",status:"working",x:78,y:62},
+  {id:"forge",name:"Forge",maker:"Anvil Lab",role:"Assembly cell",status:"idle",x:34,y:72},
+  {id:"harbor",name:"Harbor",maker:"Dock OS",role:"Port crane",status:"idle",x:52,y:46}
+ ],
+ tasks:[
+  {id:"t1",title:"Move pallet A-14 to bay 3",requester:"Atlas-7",amount:1.2,status:"open",bids:[{agentId:"forge",amount:0.9,eta:"6 min"},{agentId:"harbor",amount:1.1,eta:"4 min"}]},
+  {id:"t2",title:"Scan plot 12 soil moisture",requester:"Nimbus",amount:0.45,status:"working",awardedTo:"nimbus",bids:[]}
+ ],
+ ledger:[{id:"l1",text:"Kite-3 settled last-mile drop for Harbor",pi:0.32}]
+});
+let state=seed();
+const agent=id=>state.agents.find(a=>a.id===id);
+function render(){
+ const s=agent(state.selected);
+ document.getElementById("sel").textContent=`Selected: ${s.name} · ${s.maker} · ${s.role}`;
+ const mesh=document.getElementById("mesh");
+ mesh.innerHTML="";
+ const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+ svg.setAttribute("viewBox","0 0 100 100");
+ svg.style.cssText="position:absolute;inset:0;width:100%;height:100%";
+ state.agents.forEach((a,i)=>{const b=state.agents[(i+2)%state.agents.length];const line=document.createElementNS("http://www.w3.org/2000/svg","line");line.setAttribute("x1",a.x);line.setAttribute("y1",a.y);line.setAttribute("x2",b.x);line.setAttribute("y2",b.y);line.setAttribute("stroke","#2a2e36");line.setAttribute("stroke-width","0.4");svg.appendChild(line);});
+ mesh.appendChild(svg);
+ state.agents.forEach(a=>{const b=document.createElement("button");b.type="button";b.className="node"+(a.id===state.selected?" on":"");b.style.left=a.x+"%";b.style.top=a.y+"%";b.innerHTML=`${a.name}<small>${a.status}</small>`;b.onclick=()=>{state.selected=a.id;render();};mesh.appendChild(b);});
+ document.getElementById("tasks").innerHTML=state.tasks.map(t=>{
+  let extra="";
+  if(t.status==="open") extra=t.bids.map(bid=>`<div class="row" style="margin-top:8px"><span>${agent(bid.agentId).name} · ${bid.amount.toFixed(2)} π · ${bid.eta}</span><button class="ghost" data-award="${t.id}:${bid.agentId}">Award</button></div>`).join("");
+  if(t.status==="working") extra=`<button class="primary" data-settle="${t.id}" style="width:auto;padding:0 12px">Settle in Pi</button>`;
+  return `<div class="card"><div class="row"><div><strong>${t.title}</strong><div class="mono">${t.requester} · ${t.amount.toFixed(2)} π · ${t.status}</div></div></div>${extra}</div>`;
+ }).join("");
+ document.getElementById("ledger").innerHTML=state.ledger.map(r=>`<li class="row" style="margin-top:8px"><span class="sub">${r.text}</span><span class="ok">${r.pi.toFixed(2)} π</span></li>`).join("");
+}
+document.getElementById("form").onsubmit=e=>{e.preventDefault();const title=document.getElementById("title").value.trim();const amount=Number(document.getElementById("amount").value);if(!title||!(amount>0))return;const me=agent(state.selected);const others=state.agents.filter(a=>a.id!==me.id).slice(0,2);others.forEach(a=>a.status="negotiating");state.tasks.unshift({id:"t"+Math.random().toString(36).slice(2,6),title,requester:me.name,amount,status:"open",bids:others.map((a,i)=>({agentId:a.id,amount:Math.max(0.05,+(amount*(0.75+i*0.12)).toFixed(2)),eta:(4+i*3)+" min"}))});render();};
+document.body.onclick=e=>{const aw=e.target.dataset&&e.target.dataset.award;const st=e.target.dataset&&e.target.dataset.settle;if(aw){const [tid,aid]=aw.split(":");const t=state.tasks.find(x=>x.id===tid);const bid=t.bids.find(b=>b.agentId===aid);t.status="working";t.awardedTo=aid;t.amount=bid.amount;agent(aid).status="working";render();}if(st){const t=state.tasks.find(x=>x.id===st);const w=agent(t.awardedTo);t.status="settled";w.status="idle";state.ledger.unshift({id:"l"+Math.random().toString(36).slice(2,6),text:`${w.name} settled “${t.title}” for ${t.requester}`,pi:t.amount});render();}};
+document.getElementById("reset").onclick=()=>{state=seed();render();};
+render();
+</script>
+</body>
+</html>
