@@ -7,10 +7,12 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <style>
 :root{--bg:#0c0e12;--surface:#15181e;--s2:#1c2028;--fg:#e8e6df;--muted:#8b908a;--primary:#e8a54b;--ink:#1a1206;--border:#2a2e36;--ok:#7d9a78}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:"IBM Plex Sans",system-ui,sans-serif}button,input{font:inherit}button{cursor:pointer;min-height:44px}header,.banner,main{padding:12px 16px}header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap}.mark{width:36px;height:36px;border-radius:8px;background:var(--primary);color:var(--ink);display:grid;place-items:center;font-weight:600}.sub{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}.banner{background:var(--surface);border-bottom:1px solid var(--border);color:var(--muted);font-size:14px;margin:0}main{display:grid;gap:16px}@media(min-width:960px){main{grid-template-columns:1.1fr .9fr;padding:24px}}section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}h2{margin:0;font-size:14px;font-weight:500}.mesh{position:relative;height:320px;margin-top:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden}.node{position:absolute;transform:translate(-50%,-50%);border:1px solid var(--border);background:var(--s2);color:var(--fg);border-radius:999px;padding:8px 12px;text-align:left}.node.on{background:var(--primary);color:var(--ink);border-color:var(--primary)}.node small{display:block;font-family:"IBM Plex Mono",monospace}label{display:block;margin-top:12px;font-size:12px;color:var(--muted)}input{width:100%;margin-top:4px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:8px 12px}.primary{width:100%;margin-top:12px;background:var(--primary);color:var(--ink);border:0;border-radius:8px;font-weight:500}.ghost{background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:0 12px}li{list-style:none}.card{border:1px solid var(--border);background:var(--bg);border-radius:10px;padding:12px;margin-top:12px}.row{display:flex;justify-content:space-between;gap:8px;align-items:center}.mono{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}.ok{color:var(--ok);font-family:"IBM Plex Mono",monospace}
 ul{padding:0;margin:0}
+.user-chip{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ok);padding:0 8px}
 </style>
 </head>
 <body>
@@ -19,9 +21,13 @@ ul{padding:0;margin:0}
     <div class="mark">R</div>
     <div><div style="font-weight:600">RoboMesh</div><div class="sub">coordination · settlement · Pi</div></div>
   </div>
-  <button class="ghost" id="reset" type="button">Reset</button>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="user-chip" id="userChip" hidden></span>
+    <button class="ghost" id="authBtn" type="button">Sign in with Pi</button>
+    <button class="ghost" id="reset" type="button">Reset</button>
+  </div>
 </header>
-<p class="banner">Public prototype for Pi Production registration. Agents discover tasks, bid, and settle in Pi.</p>
+<p class="banner" id="banner">Sign in with Pi to identify as a mesh operator. Agents discover tasks, bid, and settle in Pi.</p>
 <main>
   <section>
     <h2>Live mesh</h2>
@@ -42,6 +48,41 @@ ul{padding:0;margin:0}
   </div>
 </main>
 <script>
+// Pi SDK — Production (Mainnet)
+try {
+  window.Pi.init({ version: "2.0", sandbox: false });
+} catch (e) {
+  console.warn("Pi SDK init:", e);
+}
+
+let piUser = null;
+
+async function signInWithPi() {
+  const btn = document.getElementById("authBtn");
+  btn.disabled = true;
+  btn.textContent = "Signing in…";
+  try {
+    const scopes = ["username", "payments"];
+    const onIncompletePaymentFound = (payment) => {
+      console.log("Incomplete payment found", payment);
+    };
+    const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+    piUser = auth.user;
+    document.getElementById("userChip").hidden = false;
+    document.getElementById("userChip").textContent = "@" + (piUser.username || "pioneer");
+    btn.textContent = "Signed in";
+    document.getElementById("banner").textContent =
+      "Signed in as @" + (piUser.username || "pioneer") + ". You can broadcast tasks and settle in Pi.";
+  } catch (err) {
+    console.error("Pi auth error", err);
+    btn.disabled = false;
+    btn.textContent = "Sign in with Pi";
+    alert("Pi sign-in failed or was cancelled. Open this app inside Pi Browser for the best experience.");
+  }
+}
+
+document.getElementById("authBtn").onclick = signInWithPi;
+
 const seed=()=>({
  selected:"atlas",
  agents:[
