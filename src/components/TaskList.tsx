@@ -4,6 +4,7 @@ import type { Agent, Task } from "@/types";
 interface TaskListProps {
   tasks: Task[];
   agents: Agent[];
+  settlingId?: string | null;
   onAward: (taskId: string, agentId: string) => void;
   onSettle: (taskId: string) => void;
   onRequestBetter: (taskId: string) => void;
@@ -14,6 +15,7 @@ interface TaskListProps {
 export function TaskList({
   tasks,
   agents,
+  settlingId,
   onAward,
   onSettle,
   onRequestBetter,
@@ -152,9 +154,10 @@ export function TaskList({
                 type="button"
                 className="btn btn-primary btn-sm"
                 style={{ width: "auto", marginTop: 10 }}
+                disabled={settlingId === t.id}
                 onClick={() => onSettle(t.id)}
               >
-                Settle in π
+                {settlingId === t.id ? "Waiting for Pi…" : `Settle ${t.amount.toFixed(2)} π`}
               </button>
             )}
 

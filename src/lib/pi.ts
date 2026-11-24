@@ -2,13 +2,18 @@
  * Pi Network client helpers (Production / Mainnet).
  */
 
+export type IncompletePayment = {
+  identifier: string;
+  transaction?: { txid?: string };
+};
+
 declare global {
   interface Window {
     Pi?: {
       init: (opts: { version: string; sandbox?: boolean }) => void;
       authenticate: (
         scopes: string[],
-        onIncompletePaymentFound: (payment: unknown) => void
+        onIncompletePaymentFound: (payment: IncompletePayment) => void
       ) => Promise<{
         accessToken: string;
         user: { uid: string; username: string };
@@ -39,7 +44,8 @@ export function initPi(): void {
 }
 
 export async function authenticatePi(
-  scopes: string[] = ["username", "payments"]
+  scopes: string[] = ["username", "payments"],
+  onIncomplete?: (payment: IncompletePayment) => void
 ): Promise<{ username: string; uid: string; accessToken: string } | null> {
   initPi();
   if (!window.Pi) {
@@ -47,12 +53,10 @@ export async function authenticatePi(
     return null;
   }
 
-  const onIncompletePaymentFound = (payment: unknown) => {
-    console.log("Incomplete payment", payment);
-  };
-
   try {
-    const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+    const auth = await window.Pi.authenticate(scopes, (payment) => {
+      onIncomplete?.(payment);
+    });
     return {
       username: auth.user.username,
       uid: auth.user.uid,

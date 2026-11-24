@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MeshView } from "@/components/MeshView";
 import { AgentRegistry } from "@/components/AgentRegistry";
 import { TaskForm } from "@/components/TaskForm";
@@ -6,6 +6,7 @@ import { TaskList } from "@/components/TaskList";
 import { Ledger } from "@/components/Ledger";
 import { seedAgents, seedTasks, seedLedger } from "@/data/seed";
 import { authenticatePi } from "@/lib/pi";
+import { approvePayment, completePayment, lockSettlement, resumePayment } from "@/lib/settle";
 import type {
   Agent,
   Bid,
@@ -48,6 +49,16 @@ export default function App() {
   const [capabilityFilter, setCapabilityFilter] = useState("");
   const [operator, setOperator] = useState<Operator | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [payReady, setPayReady] = useState<boolean | null>(null);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/readiness")
+      .then((r) => r.json())
+      .then((data: { apiKeyConfigured?: boolean }) => setPayReady(Boolean(data.apiKeyConfigured)))
+      .catch(() => setPayReady(false));
+  }, []);
 
   const visibleAgents = useMemo(() => {
     if (!capabilityFilter.trim()) return agents;
@@ -62,7 +73,12 @@ export default function App() {
 
   const signIn = useCallback(async () => {
     setAuthBusy(true);
-    const result = await authenticatePi(["username", "payments"]);
+    setNotice(null);
+    const result = await authenticatePi(["username", "payments"], (payment) => {
+      void resumePayment(payment.identifier, payment.transaction?.txid).then((resumed) => {
+        if (resumed.ok && resumed.fulfilled) setNotice("An interrupted Pi payment was completed.");
+      });
+    });
     setAuthBusy(false);
     if (result) {
       setOperator({
@@ -71,9 +87,7 @@ export default function App() {
         accessToken: result.accessToken,
       });
     } else {
-      alert(
-        "Pi sign-in failed or was cancelled. Open RoboMesh inside Pi Browser for the best experience."
-      );
+      setNotice("Pi sign-in only runs inside Pi Browser. The mesh still works here as a simulation.");
     }
   }, []);
 
@@ -333,31 +347,81 @@ export default function App() {
   }, []);
 
   const settle = useCallback(
-    (taskId: string) => {
+    async (taskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
-      if (!task?.awardedTo) return;
+      if (!task?.awardedTo || settlingId) return;
       const worker = agents.find((a) => a.id === task.awardedTo);
-
-      setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: "settled" as const } : t))
-      );
-      setAgents((prev) =>
-        prev.map((a) =>
-          a.id === task.awardedTo ? { ...a, status: "idle" as const } : a
-        )
-      );
-      setLedger((prev) => [
+      const awardedAgent = worker?.name ?? task.awardedTo;
+      setSettlingId(taskId);
+      setNotice(null);
+      const locked = await lockSettlement({
+        taskId,
+        title: task.title,
+        amount: task.amount,
+        awardedAgent,
+      });
+      if (!locked.ok) {
+        setSettlingId(null);
+        setNotice(locked.error);
+        return;
+      }
+      if (!window.Pi?.createPayment) {
+        setSettlingId(null);
+        setNotice(
+          `Settlement is locked at ${locked.amount.toFixed(2)} π. Open RoboMesh in Pi Browser to pay. Do not pay until the app wallet shows a public address.`
+        );
+        return;
+      }
+      window.Pi.createPayment(
         {
-          id: uid("l"),
-          text: `${worker?.name ?? "Agent"} settled “${task.title}” for ${task.requester}`,
-          pi: task.amount,
-          at: Date.now(),
-          taskId,
+          amount: locked.amount,
+          memo: locked.memo,
+          metadata: { intentId: locked.intentId, proof: locked.proof },
         },
-        ...prev,
-      ]);
+        {
+          onReadyForServerApproval: (paymentId) => {
+            void approvePayment(paymentId).then((result) => {
+              if (!result.ok) setNotice(result.error);
+            });
+          },
+          onReadyForServerCompletion: (paymentId, txid) => {
+            void completePayment(paymentId, txid).then((result) => {
+              setSettlingId(null);
+              if (!result.ok) {
+                setNotice(result.error);
+                return;
+              }
+              setTasks((prev) =>
+                prev.map((t) => (t.id === taskId ? { ...t, status: "settled" as const } : t))
+              );
+              setAgents((prev) =>
+                prev.map((a) => (a.id === task.awardedTo ? { ...a, status: "idle" as const } : a))
+              );
+              setLedger((prev) => [
+                {
+                  id: locked.intentId,
+                  text: `${awardedAgent} settled “${task.title}” for ${task.requester}`,
+                  pi: locked.amount,
+                  at: Date.now(),
+                  taskId,
+                },
+                ...prev,
+              ]);
+              setNotice(result.already ? "This settlement was already completed." : "Pi payment completed. Task settled.");
+            });
+          },
+          onCancel: () => {
+            setSettlingId(null);
+            setNotice("Payment cancelled. The task stays awarded until you settle.");
+          },
+          onError: (error) => {
+            setSettlingId(null);
+            setNotice(error?.message || "Pi payment failed.");
+          },
+        }
+      );
     },
-    [tasks, agents]
+    [tasks, agents, settlingId]
   );
 
   const reset = useCallback(() => {
@@ -401,8 +465,12 @@ export default function App() {
       </header>
 
       <p className="banner">
-        Multi-round negotiation is live. Request better terms, send counter-offers, or award a bid.
+        {payReady === false
+          ? "Server payment key is not on this deploy yet. "
+          : "Settle pays the awarded bid from your Pi wallet into RoboMesh. "}
+        The pay sheet opens only in Pi Browser.
       </p>
+      {notice ? <p className="banner">{notice}</p> : null}
 
       <main className="main">
         <div className="stack">
@@ -443,8 +511,9 @@ export default function App() {
             <TaskList
               tasks={tasks}
               agents={agents}
+              settlingId={settlingId}
               onAward={award}
-              onSettle={settle}
+              onSettle={(id) => void settle(id)}
               onRequestBetter={requestBetter}
               onCounter={counterOffer}
               onCancel={cancelTask}
